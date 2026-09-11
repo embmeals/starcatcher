@@ -132,7 +132,10 @@ body {
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":365012,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+// Filled in by the exporter. A hardcoded copy shipped stale fileSizes, so the
+// progress total was ~770KB short and the bar sat at 100% before the load
+// finished, and any export-preset change never reached the page.
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":1137516,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
@@ -147,12 +150,15 @@ const engine = new Engine(GODOT_CONFIG);
 	let statusMode = '';
 
 	function setStatusMode(mode) {
-		if (statusMode === mode || !initializing) {
-			return;
-		}
+		// 'hidden' is never refused. The stall notice sets initializing=false,
+		// and a load that finished after the notice used to be locked out
+		// here, leaving an opaque "reload the page" over a running game.
 		if (mode === 'hidden') {
 			statusOverlay.remove();
 			initializing = false;
+			return;
+		}
+		if (statusMode === mode || !initializing) {
 			return;
 		}
 		statusOverlay.style.visibility = 'visible';
@@ -230,8 +236,21 @@ const engine = new Engine(GODOT_CONFIG);
 		}
 	} else {
 		setStatusMode('progress');
+		// A stall detector, not a deadline: every byte of progress pushes the
+		// notice out again, so a slow but moving download is never told to
+		// reload, while a fetch that has truly died still gets the message.
+		var stallTimer = null;
+		function armStallTimer() {
+			clearTimeout(stallTimer);
+			stallTimer = setTimeout(function () {
+				displayFailureNotice('The game is taking longer than expected to load. Check your connection and reload the page.');
+			}, 45000);
+		}
+		armStallTimer();
+
 		engine.startGame({
 			'onProgress': function (current, total) {
+				armStallTimer();
 				if (current > 0 && total > 0) {
 					statusProgress.value = current;
 					statusProgress.max = total;
@@ -253,13 +272,6 @@ const engine = new Engine(GODOT_CONFIG);
 			clearTimeout(stallTimer);
 			displayFailureNotice(err);
 		});
-
-		// The engine bootstrap can leave startGame() pending forever if a fetch
-		// fails, which leaves the player staring at a progress bar with no
-		// explanation. Surface something actionable instead.
-		var stallTimer = setTimeout(function () {
-			displayFailureNotice('The game is taking longer than expected to load. Check your connection and reload the page.');
-		}, 90000);
 	}
 }());
 		</script>
