@@ -1,0 +1,62 @@
+name: Deploy to GitHub Pages
+
+# This repo holds the exported Godot web build. Anything pushed to main is
+# what players get, so publish it straight to Pages.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than dropping it for a newer one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify build files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required files are present
+        run: |
+          for file in index.html index.js index.pck index.wasm; do
+            if [ ! -f "$file" ]; then
+              echo "::error::Missing required build file: $file"
+              exit 1
+            fi
+            echo "Found $file ($(du -h "$file" | cut -f1))"
+          done
+
+      - name: Check the loading screen has no splash image
+        run: |
+          if grep -q 'status-splash' index.html; then
+            echo "::error::index.html still references the boot splash image. The loading screen must stay black until the title screen renders."
+            exit 1
+          fi
+          echo "Loading screen is clean."
+
+  deploy:
+    name: Deploy
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
