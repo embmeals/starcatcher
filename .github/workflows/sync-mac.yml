@@ -4,9 +4,12 @@ name: Update the Mac
 # poll every five minutes; this pushes the new build to it the moment one
 # lands, using a runner on the Mac itself.
 #
-# That runner is ephemeral and this repo requires approval for every outside
-# pull request, because a self-hosted runner on a public repo would otherwise
-# let a fork PR run arbitrary code on the Mac.
+# A self-hosted runner on a public repo would let a fork PR run arbitrary
+# code on the Mac, so this repo requires approval for every outside pull
+# request and defaults the workflow token to read-only. The runner is
+# persistent: an ephemeral one deregisters after each job and cannot
+# re-register without a repo-admin token sitting on the Mac, which is a
+# worse standing risk than the state a job could leave in _work.
 on:
   push:
     branches: [main]
