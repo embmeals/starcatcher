@@ -30,11 +30,15 @@ hand:
 1. A merge to `starlight`'s `master` runs its **Export and deploy** workflow.
 2. That exports the web build with Godot and pushes it here, to `main`.
 3. GitHub Pages publishes `main` to the `github.io` address.
-4. The Mac serving `starcatcher.emills.net` pulls this repo every five minutes
-   (`com.local.starcatcher-sync`), so it follows along on its own.
+4. That same push runs **Update the Mac**, which pulls the new build onto the
+   machine serving `starcatcher.emills.net` and checks it is really serving it.
 
 Both live sites therefore serve the same commit. The badge above is green when
 the last publish succeeded.
+
+The Mac runs the job on its own self-hosted runner, so it connects outward and
+nothing is exposed to the internet. `com.local.starcatcher-sync` still pulls
+hourly as a fallback, for a push that lands while the Mac is asleep.
 
 Editing files in this repository directly will work until the next source merge
 overwrites them.
