@@ -2,10 +2,18 @@ name: Update the Mac
 
 # The Mac serves starcatcher.emills.net from a clone of this repo. It used to
 # poll every five minutes; this pushes the new build to it the moment one
-# lands, using a runner on the Mac itself so nothing has to be exposed.
+# lands, using a runner on the Mac itself.
+#
+# That runner is ephemeral and this repo requires approval for every outside
+# pull request, because a self-hosted runner on a public repo would otherwise
+# let a fork PR run arbitrary code on the Mac.
 on:
   push:
     branches: [main]
+    # A README or workflow change does not alter the served files, and the
+    # sync purges the edge cache on any change, which evicts the 40MB engine
+    # and brings back the slow first load for the next visitor.
+    paths: ['index.*']
   workflow_dispatch:
 
 # One update at a time, and never abandon one half-done.
@@ -16,6 +24,9 @@ concurrency:
 jobs:
   pull:
     runs-on: [self-hosted, starcatcher]
+    # A hung serve.py used to hold the only runner for the six-hour default
+    # and block every later deploy behind it.
+    timeout-minutes: 5
     steps:
       - name: Pull the new build
         run: |
@@ -23,18 +34,23 @@ jobs:
           "$HOME/Apps/starcatcher/sync-site.sh"
           tail -1 "$HOME/Apps/starcatcher/sync.log"
 
-      - name: Check the site is serving the commit we just pushed
+      - name: Check the site is serving the newest build
         run: |
           set -euo pipefail
-          live=$(git -C "$HOME/Apps/starcatcher/site" rev-parse HEAD)
-          if [ "$live" != "$GITHUB_SHA" ]; then
-            echo "::error::Mac is on $live but this run deployed $GITHUB_SHA"
+          site="$HOME/Apps/starcatcher/site"
+          # Compare against what main is NOW, not the commit that triggered
+          # this run. A second push landing before this fetch used to make
+          # the Mac correctly move to the newer build and then fail the check.
+          newest=$(git -C "$site" ls-remote origin main | cut -f1)
+          live=$(git -C "$site" rev-parse HEAD)
+          if [ "$live" != "$newest" ]; then
+            echo "::error::Mac is on $live but main is $newest"
             exit 1
           fi
           # Prove the server is actually answering, not just that files moved.
-          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5200/index.html)
+          code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' http://localhost:5200/index.html)
           if [ "$code" != "200" ]; then
             echo "::error::serve.py returned $code on localhost:5200"
             exit 1
           fi
-          echo "Mac serving $GITHUB_SHA"
+          echo "Mac serving $live"
