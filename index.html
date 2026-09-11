@@ -72,6 +72,29 @@ body {
 	margin: 0 auto;
 }
 
+/* The engine is a ~10MB download on a first visit. Without a number on screen
+   a slow connection is indistinguishable from a broken page. */
+#status-percent {
+	position: absolute;
+	bottom: calc(10% + 22px);
+	left: 0;
+	right: 0;
+	text-align: center;
+	color: #cfc6ff;
+	font: 600 15px system-ui, sans-serif;
+	letter-spacing: 0.08em;
+}
+
+#status-hint {
+	position: absolute;
+	bottom: calc(10% - 26px);
+	left: 0;
+	right: 0;
+	text-align: center;
+	color: #6d6590;
+	font: 400 12px system-ui, sans-serif;
+}
+
 #status-notice {
 	background-color: #5b3943;
 	border-radius: 0.5rem;
@@ -101,7 +124,9 @@ body {
 		</noscript>
 
 		<div id="status">
+			<div id="status-percent"></div>
 			<progress id="status-progress"></progress>
+			<div id="status-hint"></div>
 			<div id="status-notice"></div>
 		</div>
 
@@ -114,6 +139,8 @@ const engine = new Engine(GODOT_CONFIG);
 (function () {
 	const statusOverlay = document.getElementById('status');
 	const statusProgress = document.getElementById('status-progress');
+	const statusPercent = document.getElementById('status-percent');
+	const statusHint = document.getElementById('status-hint');
 	const statusNotice = document.getElementById('status-notice');
 
 	let initializing = true;
@@ -129,8 +156,16 @@ const engine = new Engine(GODOT_CONFIG);
 			return;
 		}
 		statusOverlay.style.visibility = 'visible';
-		statusProgress.style.display = mode === 'progress' ? 'block' : 'none';
+		const loading = mode === 'progress';
+		statusProgress.style.display = loading ? 'block' : 'none';
+		statusPercent.style.display = loading ? 'block' : 'none';
+		statusHint.style.display = loading ? 'block' : 'none';
 		statusNotice.style.display = mode === 'notice' ? 'block' : 'none';
+		if (loading) {
+			statusPercent.textContent = 'LOADING';
+			// Only worth saying on the download that actually costs something.
+			statusHint.textContent = 'First visit downloads the engine';
+		}
 		statusMode = mode;
 	}
 
@@ -200,9 +235,13 @@ const engine = new Engine(GODOT_CONFIG);
 				if (current > 0 && total > 0) {
 					statusProgress.value = current;
 					statusProgress.max = total;
+					statusPercent.textContent = 'LOADING ' + Math.floor(current / total * 100) + '%';
 				} else {
+					// Some servers send no length, so the bar has to stay
+					// indeterminate. Say so rather than showing a stuck 0%.
 					statusProgress.removeAttribute('value');
 					statusProgress.removeAttribute('max');
+					statusPercent.textContent = 'LOADING';
 				}
 			},
 		}).then(() => {
