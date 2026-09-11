@@ -1,0 +1,40 @@
+name: Update the Mac
+
+# The Mac serves starcatcher.emills.net from a clone of this repo. It used to
+# poll every five minutes; this pushes the new build to it the moment one
+# lands, using a runner on the Mac itself so nothing has to be exposed.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One update at a time, and never abandon one half-done.
+concurrency:
+  group: mac-sync
+  cancel-in-progress: false
+
+jobs:
+  pull:
+    runs-on: [self-hosted, starcatcher]
+    steps:
+      - name: Pull the new build
+        run: |
+          set -euo pipefail
+          "$HOME/Apps/starcatcher/sync-site.sh"
+          tail -1 "$HOME/Apps/starcatcher/sync.log"
+
+      - name: Check the site is serving the commit we just pushed
+        run: |
+          set -euo pipefail
+          live=$(git -C "$HOME/Apps/starcatcher/site" rev-parse HEAD)
+          if [ "$live" != "$GITHUB_SHA" ]; then
+            echo "::error::Mac is on $live but this run deployed $GITHUB_SHA"
+            exit 1
+          fi
+          # Prove the server is actually answering, not just that files moved.
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5200/index.html)
+          if [ "$code" != "200" ]; then
+            echo "::error::serve.py returned $code on localhost:5200"
+            exit 1
+          fi
+          echo "Mac serving $GITHUB_SHA"
