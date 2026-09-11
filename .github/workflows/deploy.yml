@@ -2,9 +2,17 @@ name: Deploy to GitHub Pages
 
 # This repo holds the exported Godot web build. Anything pushed to main is
 # what players get, so publish it straight to Pages.
+#
+# The producer (starlight's Export and deploy workflow) is the only thing that
+# writes index.*, and it already refuses to push a build missing a file or
+# carrying the old boot splash. Re-checking that here on a second runner and
+# a second 40MB checkout could never catch anything the producer had not
+# already stopped, so the checks live in the one job that publishes.
 on:
   push:
     branches: [main]
+    # A README or workflow edit does not change what Pages serves.
+    paths: ['index.*']
   workflow_dispatch:
 
 permissions:
@@ -18,39 +26,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify:
-    name: Verify build files
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Check required files are present
-        run: |
-          for file in index.html index.js index.pck index.wasm; do
-            if [ ! -f "$file" ]; then
-              echo "::error::Missing required build file: $file"
-              exit 1
-            fi
-            echo "Found $file ($(du -h "$file" | cut -f1))"
-          done
-
-      - name: Check the loading screen has no splash image
-        run: |
-          if grep -q 'status-splash' index.html; then
-            echo "::error::index.html still references the boot splash image. The loading screen must stay black until the title screen renders."
-            exit 1
-          fi
-          echo "Loading screen is clean."
-
   deploy:
     name: Deploy
-    needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Refuse a build that is missing a file
+        # Guards a hand edit, which nobody is meant to make. Same list and
+        # marker as the producer; keep them matching.
+        run: |
+          for file in index.html index.js index.pck index.wasm; do
+            if [ ! -s "$file" ]; then
+              echo "::error::Missing or empty build file: $file"
+              exit 1
+            fi
+          done
+          if grep -q 'status-splash' index.html; then
+            echo "::error::index.html references the boot splash image again"
+            exit 1
+          fi
 
       - uses: actions/configure-pages@v5
 
