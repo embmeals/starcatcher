@@ -45,44 +45,21 @@ body {
 	}
 }
 
-#status, #status-splash, #status-progress {
+#status, #status-progress {
 	position: absolute;
 	left: 0;
 	right: 0;
 }
 
-#status, #status-splash {
+#status {
 	top: 0;
 	bottom: 0;
-}
-
-#status {
-	background-color: #242424;
+	background-color: #000;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
 	align-items: center;
 	visibility: hidden;
-}
-
-#status-splash {
-	max-height: 100%;
-	max-width: 100%;
-	margin: auto;
-}
-
-#status-splash.show-image--false {
-	display: none;
-}
-
-#status-splash.fullsize--true {
-	height: 100%;
-	width: 100%;
-	object-fit: contain;
-}
-
-#status-splash.use-filter--false {
-	image-rendering: pixelated;
 }
 
 #status-progress, #status-notice {
@@ -124,7 +101,6 @@ body {
 		</noscript>
 
 		<div id="status">
-			<img id="status-splash" class="show-image--true fullsize--true use-filter--true" src="index.png" alt="">
 			<progress id="status-progress"></progress>
 			<div id="status-notice"></div>
 		</div>
@@ -231,7 +207,9 @@ const engine = new Engine(GODOT_CONFIG);
 			},
 		}).then(() => {
 			clearTimeout(stallTimer);
-			setStatusMode('hidden');
+			// Give Godot a couple of frames to paint its title screen before
+			// tearing down the black overlay, otherwise the canvas flashes.
+			requestAnimationFrame(() => requestAnimationFrame(() => setStatusMode('hidden')));
 		}, (err) => {
 			clearTimeout(stallTimer);
 			displayFailureNotice(err);
